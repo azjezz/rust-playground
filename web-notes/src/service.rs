@@ -1,5 +1,5 @@
 use actix_web::HttpResponse;
-use tera::{Context, Tera, Error};
+use tera::{Context, Tera};
 
 pub struct Templating {
     tera: Tera,

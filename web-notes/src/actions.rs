@@ -1,23 +1,34 @@
-use actix_web::{get, post, web};
+use actix_web::web;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::r2d2::PooledConnection;
 use tera::Context;
 use uuid::Uuid;
 
+use crate::repository::notes;
 use crate::models::NewNote;
-use crate::models::Note;
 use crate::service::Templating;
 
-#[get("/")]
-pub async fn index(templating: web::Data<Templating>) -> Result<actix_web::HttpResponse, actix_web::Error> {
+pub async fn index(
+    pool: web::Data<Pool<ConnectionManager<SqliteConnection>>>,
+    templating: web::Data<Templating>
+) -> Result<actix_web::HttpResponse, actix_web::Error> {
+    let connection = pool.get().expect("couldn't get db connection from pool");
+    let mut notes = web::block(move || notes::find_all(&connection))
+        .await
+        .map_err(|e| {
+            eprintln!("{}", e);
+            actix_web::HttpResponse::InternalServerError().finish()
+        })?
+        .unwrap();
+
+    notes.reverse();
+
     let mut context = Context::new();
-    context.insert("action", "/new");
+    context.insert("notes", &notes);
 
     return templating.render("index.html.twig", &context);
 }
 
-#[post("/new")]
 pub async fn new(
     pool: web::Data<Pool<ConnectionManager<SqliteConnection>>>,
     form: web::Form<NewNote>,
@@ -25,30 +36,34 @@ pub async fn new(
     let connection = pool.get().expect("couldn't get db connection from pool");
 
     // use web::block to offload blocking Diesel code without blocking server thread
-    let _note = web::block(move || insert_note(&form.text, &connection))
+    let _note = web::block(move || notes::insert(&form.text, &connection))
         .await
         .map_err(|e| {
             eprintln!("{}", e);
             actix_web::HttpResponse::InternalServerError().finish()
         })?;
 
-    let response = actix_web::HttpResponse::TemporaryRedirect().header("Location", "/").finish();
+
+    let response = actix_web::HttpResponse::Found().header("Location", "/").finish();
 
     Ok(response)
 }
 
-fn insert_note(note: &str, connection: &PooledConnection<ConnectionManager<SqliteConnection>>) -> Result<Note, diesel::result::Error> {
-    // It is common when using Diesel with Actix web to import schema-related
-    // modules inside a function's scope (rather than the normal module's scope)
-    // to prevent import collisions and namespace pollution.
-    use crate::schema::notes::dsl::*;
+pub async fn delete(
+    pool: web::Data<Pool<ConnectionManager<SqliteConnection>>>,
+    note_uid: web::Path<Uuid>,
+) -> Result<actix_web::HttpResponse, actix_web::Error> {
+    let connection = pool.get().expect("couldn't get db connection from pool");
 
-    let new_note = Note {
-        id: Uuid::new_v4().to_string(),
-        text: note.parse().unwrap(),
-    };
+    // use web::block to offload blocking Diesel code without blocking server thread
+    web::block(move || notes::delete(&note_uid.into_inner(), &connection))
+        .await
+        .map_err(|e| {
+            eprintln!("{}", e);
+            actix_web::HttpResponse::InternalServerError().finish()
+        })?;
 
-    diesel::insert_into(notes).values(&new_note).execute(&*connection).expect("Unable to insert new note.");
+    let response = actix_web::HttpResponse::Found().header("Location", "/").finish();
 
-    Ok(new_note)
+    Ok(response)
 }
