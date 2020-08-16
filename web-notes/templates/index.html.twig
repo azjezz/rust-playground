@@ -1,0 +1,30 @@
+{% extends 'layout.html.twig' %}
+
+{% block content %}
+    <section class="uk-padding-large uk-padding-remove-bottom">
+        <div class="uk-flex uk-flex-center uk-width-1-1">
+            <div class="uk-grid-match uk-child-width-1-1" uk-grid>
+                <div>
+                    <div class="uk-card uk-card-default uk-card-body">
+                        <form method="POST" action="{{ action }}">
+                            <div class="uk-margin">
+                                <label>
+                                    <textarea name="text" class="uk-textarea" rows="3"
+                                              placeholder="What's on your mind?"></textarea>
+                                </label>
+                            </div>
+
+                            <input type="submit" class="uk-button uk-button-primary" value="Submit"/>
+                        </form>
+                    </div>
+                </div>
+                <div>
+                    <div class="uk-card uk-card-default uk-card-body">Item<br>...</div>
+                </div>
+                <div>
+                    <div class="uk-card uk-card-default uk-card-body">Item<br>...<br>...</div>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}
